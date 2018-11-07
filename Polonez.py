@@ -1,23 +1,25 @@
 import win32com.client
 import os
 import pandas as pd
-
+__WBR__ = True
 
 VISUM_PATH = os.path.join(os.getcwd(),"data//visum.ver")
+VISUM_PATH = "E://Niedzielski//WBR.ver"
 ATTS = ["LENGTH",	"IMPEDANCE",	"T0",	"TCUR",	"V0",	"VCUR"]
-ATT = "T0"
+ATT = "TCUR"
 ATT_PUT = "Time"
 
 TSYS = "SO"
-MODE = "PuT"
-DEP_TIME = "08:00"
-KRYTERIUM = 0
+MODE = "KZ"
+DEP_TIME = "16:00"
+KRYTERIUM = 1
 MATRIX_NO = 102
 
 BUDGET = 120
 
 
 POI_CAT = 1
+POI_CAT = 37 # stadiony - 10 obiektow
 """
 Attributes for SPS PrT
 Member                  Value
@@ -91,8 +93,11 @@ def POI2NearestSPoint(Visum):
         POI = Iterator.Item
         nearest_node = mm.GetNearestNode(POI.AttValue("XCoord"), POI.AttValue("YCoord"), 1000, True)
         if nearest_node.Success:
-            POI.SetAttValue("SPoint", nearest_node.Node.AttValue(r"CONCATENATE:STOPAREAS\NO"))
-            POI.SetAttValue("Dist_PuT", nearest_node.Distance)
+            if nearest_node.Node.AttValue(r"COUNT:STOPAREAS") < 2:
+                POI.SetAttValue("SPoint", nearest_node.Node.AttValue(r"CONCATENATE:STOPAREAS\NO"))
+            else:
+                POI.SetAttValue("SPoint", nearest_node.Node.AttValue(r"CONCATENATE:STOPAREAS\NO").split(",")[0])
+            POI.SetAttValue("Dist_PuT", nearest_node.Distance/1.4)
         Iterator.Next()
     Visum.Graphic.StopDrawing = False
 
@@ -104,13 +109,13 @@ def MainLoopStages(Visum):
 
     Zones = Visum.Net.Zones.GetMultiAttValues("No")  # rejony do iteracji
     # dane o POI
-    POIs = Visum.Net.POICategories.ItemByKey(1).POIs.GetMultipleAttributes(["No", "Node", "SPoint", "Dist_PrT", "Dist_PuT"])
+    POIs = Visum.Net.POICategories.ItemByKey(POI_CAT).POIs.GetMultipleAttributes(["No", "Node", "SPoint", "Dist_PrT", "Dist_PuT"])
 
     # glowna petla
-    for OZone in Zones:
+    for OZone in Zones[:30]:
         Z = Visum.Net.Zones.ItemByKey(OZone[1]) # para rejonow Z
         for POI in POIs:
-            #S1
+            #s1
             Przez_PrT = Visum.Net.Nodes.ItemByKey(POI[1]) #Punkt w sieci dla POI
             CzPrT = SPS_PrT(Z, Przez_PrT) + POI[3] # Oblicz czas PrT (2x dojscie do POI)
 
@@ -119,7 +124,7 @@ def MainLoopStages(Visum):
                 CzPuT = SPS_PuT(Z, Przez_PuT) + POI[4]   # Oblicz czas PuT (2x dojscie do POI)
             else:
                 CzPuT = 999999
-            print("From {} to {} in {} PrT, {} PuT".format(OZone[1], int(POI[0]), CzPrT, CzPuT))
+            print("From Zone {} to POI {} in {} PrT, {} PuT".format(OZone[1], int(POI[0]), CzPrT, CzPuT))
             df_s1.loc[df_s1.shape[0] + 1] = [OZone[1], int(POI[0]), CzPrT, CzPuT] # zapisz rekord w bazie danych
 
             #s2
@@ -130,7 +135,7 @@ def MainLoopStages(Visum):
                 CzPuT = SPS_PuT(Przez_PuT,Z) + POI[4]  # Oblicz czas PuT (2x dojscie do POI)
             else:
                 CzPuT = 999999
-            print("From {} to {} in {} PrT, {} PuT".format(OZone[1], int(POI[0]), CzPrT, CzPuT))
+            print("From POI {} to Zone {} in {} PrT, {} PuT".format(int(POI[0]), OZone[1] , CzPrT, CzPuT))
             df_s2.loc[df_s1.shape[0] + 1] = [int(POI[0]), OZone[1], CzPrT, CzPuT]  # zapisz rekord w bazie danych
 
     df_s1.to_csv("data//From_Via.csv")  # zapisz baze do pliku
@@ -145,7 +150,7 @@ def MainLoop(Visum):
 
     Zones = Visum.Net.Zones.GetMultiAttValues("No")  # rejony do iteracji
     # dane o POI
-    POIs = Visum.Net.POICategories.ItemByKey(1).POIs.GetMultipleAttributes(["No", "Node", "SPoint", "Dist_PrT", "Dist_PuT"])
+    POIs = Visum.Net.POICategories.ItemByKey(POI_CAT).POIs.GetMultipleAttributes(["No", "Node", "SPoint", "Dist_PrT", "Dist_PuT"])
 
     # glowna petla
     for OZone in Zones:
@@ -182,14 +187,12 @@ def Process():
 
 if __name__ == "__main__":
 
-    Visum = win32com.client.Dispatch("Visum.Visum")  # uruchom Visum
-    Visum.LoadVersion(VISUM_PATH)  # zaladuj plik
+    #Visum = win32com.client.Dispatch("Visum.Visum")  # uruchom Visum
+    #Visum.LoadVersion(VISUM_PATH)  # zaladuj plik
 
-    POI2NearestNode(Visum) # przypisz wezly sieci do POI
-    POI2NearestSPoint(Visum) # przypisz przystanki do POI
-
-    MainLoopStages(Visum) # glowny algorytm
-
+    #POI2NearestNode(Visum) # przypisz wezly sieci do POI
+    #POI2NearestSPoint(Visum) # przypisz przystanki do POI
+    #MainLoopStages(Visum) # glowny algorytm
     Process()
     #Visum.SaveVersion(VISUM_PATH)
 
