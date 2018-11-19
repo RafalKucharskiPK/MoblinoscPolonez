@@ -4,7 +4,7 @@ import pandas as pd
 __WBR__ = True
 
 VISUM_PATH = os.path.join(os.getcwd(),"data//visum.ver")
-VISUM_PATH = "E://Niedzielski//WBR.ver"
+VISUM_PATH = "E://PAN//WBR.ver"
 ATTS = ["LENGTH",	"IMPEDANCE",	"T0",	"TCUR",	"V0",	"VCUR"]
 ATT = "TCUR"
 ATT_PUT = "Time"
@@ -16,6 +16,9 @@ KRYTERIUM = 1
 MATRIX_NO = 102
 
 BUDGET = 120
+
+CZAS_PARKOWANIA = {"SPPN":6*60,
+                   "POZA_SPPN":3*60}
 
 
 POI_CAT = 1
@@ -117,7 +120,9 @@ def MainLoopStages(Visum):
         for POI in POIs:
             #s1
             Przez_PrT = Visum.Net.Nodes.ItemByKey(POI[1]) #Punkt w sieci dla POI
-            CzPrT = SPS_PrT(Z, Przez_PrT) + POI[3] # Oblicz czas PrT (2x dojscie do POI)
+            CzPrT = SPS_PrT(Z, Przez_PrT) \
+                    + POI[3] +\
+                    (CZAS_PARKOWANIA["SPPN"] if Z.AtrValue("F_SPPN")>0 else CZAS_PARKOWANIA["POZA_SPPN"]) # Oblicz czas PrT (2x dojscie do POI)
 
             if POI[2] is not None:
                 Przez_PuT = Visum.Net.StopAreas.ItemByKey(POI[2]) # Przystanek dla POI (jesli jest)
