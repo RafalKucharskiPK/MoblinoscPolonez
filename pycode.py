@@ -4,10 +4,11 @@ import pandas as pd
 __WBR__ = True
 
 VISUM_PATH = os.path.join(os.getcwd(),"data//visum.ver")
-VISUM_PATH = "E://PAN//WBR.ver"
+#VISUM_PATH = "E://PAN//WBR.ver"
 ATTS = ["LENGTH",	"IMPEDANCE",	"T0",	"TCUR",	"V0",	"VCUR"]
 ATT = "TCUR"
 ATT_PUT = "Time"
+
 
 TSYS = "SO"
 MODE = "KZ"
@@ -22,7 +23,7 @@ CZAS_PARKOWANIA = {"SPPN":6*60,
 
 
 POI_CAT = 1
-POI_CAT = 37 # stadiony - 10 obiektow
+#POI_CAT = 37 # stadiony - 10 obiektow
 """
 Attributes for SPS PrT
 Member                  Value
@@ -54,14 +55,14 @@ ToNodeNo
 Length  
 Time 
 """
-def SPS_PrT(_from, _to):
+def SPS_PrT(_from, _to, _tsys = TSYS):
     # Szuka sciezki w sieci drogowej dla zadanego kryterium pomiedzy zadana para punktow, zwraca zadany atrybut
     RouteSearch = Visum.Analysis.RouteSearchPrT
     Route = Visum.CreateNetElements()
     RouteSearch.Clear()
     Route.Add(_from)
     Route.Add(_to)
-    RouteSearch.Execute(Route, TSYS, KRYTERIUM)
+    RouteSearch.Execute(Route, _tsys, KRYTERIUM)
     return RouteSearch.AttValue(ATT)
 
 def SPS_PuT(_from, _to):
@@ -87,7 +88,6 @@ def POI2NearestNode(Visum):
         Iterator.Next()
     Visum.Graphic.StopDrawing = False
 
-
 def POI2NearestSPoint(Visum):
     Visum.Graphic.StopDrawing = True
     mm = Visum.Net.CreateMapMatcher()
@@ -102,6 +102,23 @@ def POI2NearestSPoint(Visum):
                 POI.SetAttValue("SPoint", nearest_node.Node.AttValue(r"CONCATENATE:STOPAREAS\NO").split(",")[0])
             POI.SetAttValue("Dist_PuT", nearest_node.Distance/1.4)
         Iterator.Next()
+    Visum.Graphic.StopDrawing = False
+
+
+def POI2NearestZone(Visum):
+    Visum.Graphic.StopDrawing = True
+    mm = Visum.Net.CreateMapMatcher()
+    Iterator = Visum.Net.POICategories.ItemByKey(POI_CAT).POIs.Iterator
+    while Iterator.Valid:
+        POI = Iterator.Item
+        Z = Visum.Net.Zones.ItemByKey(POI.AttValue("ZoneID"))  # para rejonow Z
+        nearest_node = mm.GetNearestNode(POI.AttValue("XCoord"), POI.AttValue("YCoord"), 500, False)
+        if nearest_node.Success:
+            POI.SetAttValue("Node", nearest_node.Node.AttValue("No"))
+            CzPrT = SPS_PrT(Z, nearest_node.Node)
+            POI.SetAttValue("Czas_Zone", CzPrT + nearest_node.Distance / 1.4)
+        Iterator.Next()
+
     Visum.Graphic.StopDrawing = False
 
 def MainLoopStages(Visum):
@@ -192,14 +209,15 @@ def Process():
 
 if __name__ == "__main__":
 
-    #Visum = win32com.client.Dispatch("Visum.Visum")  # uruchom Visum
-    #Visum.LoadVersion(VISUM_PATH)  # zaladuj plik
+    Visum = win32com.client.Dispatch("Visum.Visum")  # uruchom Visum
+    Visum.LoadVersion(VISUM_PATH)  # zaladuj plik
+    POI2NearestZone(Visum)
 
     #POI2NearestNode(Visum) # przypisz wezly sieci do POI
     #POI2NearestSPoint(Visum) # przypisz przystanki do POI
     #MainLoopStages(Visum) # glowny algorytm
-    Process()
-    #Visum.SaveVersion(VISUM_PATH)
+    #Process()
+    Visum.SaveVersion(VISUM_PATH)
 
 
 
