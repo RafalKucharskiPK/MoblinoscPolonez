@@ -3,10 +3,10 @@ import os
 import pandas as pd
 __WBR__ = True
 
-VISUM_PATH = os.path.join(os.getcwd(),"data//visum.ver")
-#VISUM_PATH = "E://PAN//WBR.ver"
+#VISUM_PATH = os.path.join(os.getcwd(),"data//visum.ver")
+VISUM_PATH = "E://Niedzielski//WBR.ver"
 ATTS = ["LENGTH",	"IMPEDANCE",	"T0",	"TCUR",	"V0",	"VCUR"]
-ATT = "TCUR"
+ATT = "LENGTH"
 ATT_PUT = "Time"
 
 
@@ -22,7 +22,7 @@ CZAS_PARKOWANIA = {"SPPN":6*60,
                    "POZA_SPPN":3*60}
 
 
-POI_CAT = 1
+POI_CAT = 101
 #POI_CAT = 37 # stadiony - 10 obiektow
 """
 Attributes for SPS PrT
@@ -109,14 +109,17 @@ def POI2NearestZone(Visum):
     Visum.Graphic.StopDrawing = True
     mm = Visum.Net.CreateMapMatcher()
     Iterator = Visum.Net.POICategories.ItemByKey(POI_CAT).POIs.Iterator
+    i=0
     while Iterator.Valid:
+        i+=1
+        print(i)
         POI = Iterator.Item
         Z = Visum.Net.Zones.ItemByKey(POI.AttValue("ZoneID"))  # para rejonow Z
         nearest_node = mm.GetNearestNode(POI.AttValue("XCoord"), POI.AttValue("YCoord"), 500, False)
         if nearest_node.Success:
             POI.SetAttValue("Node", nearest_node.Node.AttValue("No"))
             CzPrT = SPS_PrT(Z, nearest_node.Node)
-            POI.SetAttValue("Czas_Zone", CzPrT + nearest_node.Distance / 1.4)
+            POI.SetAttValue("Czas_Zone", (CzPrT + nearest_node.Distance) / 1.4 )
         Iterator.Next()
 
     Visum.Graphic.StopDrawing = False
@@ -203,6 +206,48 @@ def Process():
     result['Czas_PuT'] = result['Czas_PuT_x'] + result['Czas_PuT_y']
     result = result[['Z_Rejon',"POI", "Do_Rejon",'Czas_PuT', 'Czas_PrT']] # u'Czas_PrT_x', u'Czas_PuT_x', u'Czas_PrT_y', u'Czas_PuT_y']]
     result.to_csv("data//From_Via_To.csv")  # zapisz baze do pliku
+
+
+def z_jupytera():
+    VISUM_PATH = "E://Niedzielski//WBR.ver"
+    POI_CAT = 101  # KINO_TEATR_MUZEUM
+    MTX_JRT = 10002002
+    MTX_PRT = 10002101
+
+    Visum = win32com.client.Dispatch("Visum.Visum")  # uruchom Visum
+    Visum.LoadVersion(VISUM_PATH)  # zaladuj plik
+    POIs = pd.DataFrame(list(
+        Visum.Net.POICategories.ItemByKey(POI_CAT).POIs.GetMultipleAttributes(["No", "ZoneID", "Czas_Zone", "SPPN"])),
+                        columns=["POI", "ZoneID", "Czas_Zone", "SPPN"])
+    POIs.ZoneID = POIs.ZoneID.astype(int)
+    POIs.POI = POIs.POI.astype(int)
+
+    cols = Visum.Net.Zones.GetMultiAttValues('No', False)
+    cols = [int(_[1]) for _ in cols]
+    mtx = Visum.Net.Matrices.ItemByKey(MTX_JRT)
+    vals = list(mtx.GetValuesFloat())
+    JRT = pd.DataFrame(vals, cols, cols)
+
+    mtx = Visum.Net.Matrices.ItemByKey(MTX_PRT)
+    vals = list(mtx.GetValuesFloat())
+    PRT = pd.DataFrame(vals, cols, cols)
+
+    JRT = JRT.stack().reset_index()
+    JRT.columns = ['Z', "Do", "Czas_PuT"]
+    PRT = PRT.stack().reset_index()
+    PRT.columns = ['Z', "Do", "Czas_PrT"]
+
+    jk = pd.merge(JRT, POIs, how='outer', left_on="Do", right_on="ZoneID").dropna()
+
+    ki = pd.merge(POIs, JRT, how='outer', left_on="ZoneID", right_on="Z").dropna()
+
+    jki_JRT = pd.merge(jk, ki, on='POI')
+
+    jki_JRT['Czas_PuT'] = jki_JRT.Czas_PuT_x + jki_JRT.Czas_PuT_y + 2 * jki_JRT.Czas_Zone_x
+    jki_JRT = jki_JRT[['Z_x', 'POI', 'Do_y', 'Czas_PuT']]
+    jki_JRT.columns = ['Z_Rejon', 'POI', 'Do_Rejon', 'Czas_PuT']
+
+    jki_JRT.to_csv("jki_JRT.csv")
 
 
 
