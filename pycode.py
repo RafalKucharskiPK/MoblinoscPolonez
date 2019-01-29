@@ -22,7 +22,7 @@ CZAS_PARKOWANIA = {"SPPN":6*60,
                    "POZA_SPPN":3*60}
 
 
-POI_CAT = 101
+POI_CAT = 100
 #POI_CAT = 37 # stadiony - 10 obiektow
 """
 Attributes for SPS PrT
