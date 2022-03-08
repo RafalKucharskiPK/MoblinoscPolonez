@@ -1,0 +1,369 @@
+Module Module1
+
+    REM Option Base 0
+    Sub Main()
+
+        FileOpen(11, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_oik.txt", OpenMode.Input)
+        FileOpen(12, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_djk.txt", OpenMode.Input)
+        FileOpen(13, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_full_xij.txt", OpenMode.Input)
+        FileOpen(14, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_dist.txt", OpenMode.Input)
+        FileOpen(15, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_full_xij_k1.txt", OpenMode.Input)
+        FileOpen(16, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_full_xij_k2.txt", OpenMode.Input)
+        FileOpen(17, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_full_xij_k3.txt", OpenMode.Input)
+        FileOpen(2, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_output.txt", OpenMode.Output)
+        FileOpen(3, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_output_total.txt", OpenMode.Output)
+        FileOpen(4, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_output_nxn.txt", OpenMode.Output)
+        FileOpen(5, "j:\research\synthetic_flow_MOK&LEE\wichita\wichita_output_total_sums.txt", OpenMode.Output)
+
+        REM observed priors
+        Dim q(600, 600, 6), dis(600, 600)
+        REM observed sums
+        Dim xobs(600, 600, 6), oik(600, 6), djk(600, 6), xij(600, 600)
+        REM model parameters
+        Dim xmod(600, 600, 6), aik(600, 6), bjk(600, 6), cij(600, 600)
+        REM model sums
+        Dim sumi(600, 6), sumj(600, 6), sumx(600, 600)
+        Dim tempi(600), tempj(600), oik_s(600), djk_s(600)
+        REM k full observed flows
+        Dim k1(600, 600), k2(600, 600), k3(600, 600)
+
+        Dim beta = 0.001
+
+        Dim n = 464
+        Dim kk = 3
+        Dim ss = 0
+        Dim dd = 0
+
+        REM Input #11, a$
+        For k = 1 To kk
+            For i = 1 To n
+                Input(11, oik(i, k))
+            Next i
+        Next k
+
+        For i = 1 To n
+            oik_s(i) = 0
+            tempi(i) = 0
+            For k = 1 To kk
+                If oik(i, k) = 0 Then
+                    oik(i, k) = 1
+                End If
+                oik_s(i) = oik_s(i) + oik(i, k)
+                ss = ss + oik(i, k)
+            Next k
+            Debug.Print(oik(i, 1), oik(i, 2), oik(i, 3))
+        Next i
+
+
+        REM Input #12, b$
+        For k = 1 To kk
+            For j = 1 To n
+                Input(12, djk(j, k))
+            Next j
+        Next k
+
+        For j = 1 To n
+            tempj(j) = 0
+            djk_s(j) = 0
+            For k = 1 To kk
+                If djk(j, k) = 0 Then
+                    djk(j, k) = 1
+                End If
+                djk_s(j) = djk_s(j) + djk(j, k)
+                dd = dd + djk(j, k)
+            Next k
+            Debug.Print(djk(j, 1), djk(j, 2), djk(j, 3))
+        Next j
+
+        Dim tottot = 0.0
+        Dim obstottot = 0.0
+
+        REM Input #13, c$
+        For k = 1 To kk
+            oik(n + 1, k) = 1
+            djk(n + 1, k) = 1
+        Next k
+        For i = 1 To n
+            For j = 1 To n
+                Input(13, xij(i, j))
+                obstottot = obstottot + xij(i, j)
+                If xij(i, j) = 0 Then
+                    xij(i, j) = 0.001
+                End If
+                tempi(i) = tempi(i) + xij(i, j)
+                tempj(j) = tempj(j) + xij(i, j)
+                tottot = tottot + xij(i, j)
+            Next j
+        Next i
+
+        Debug.Print("tottot =", tottot)
+
+        REM Input #14, d$
+        For i = 1 To n
+            For j = 1 To n
+                Input(14, dis(i, j))
+            Next j
+            dis(i, n + 1) = 50
+            dis(n + 1, i) = 50
+            If oik_s(i) > tempi(i) Then
+                xij(i, n + 1) = oik_s(i) - tempi(i)
+            Else
+                xij(i, n + 1) = 0
+            End If
+            If djk_s(i) - tempj(i) > 0 Then
+                xij(n + 1, i) = djk_s(i) - tempj(i)
+            Else
+                xij(n + 1, i) = 0
+            End If
+        Next i
+
+
+        REM the cij balancing factors
+
+        For i = 1 To n + 1
+            For j = 1 To n + 1
+                cij(i, j) = 1.0#
+            Next j
+        Next i
+
+        REM initialize bjk
+
+        For j = 1 To n + 1
+            For k = 1 To kk
+                bjk(j, k) = 1.0#
+                For i = 1 To n + 1
+                    REM substitute a real measure of separation
+                    q(i, j, k) = Math.Exp(-beta * dis(i, j))
+                Next i
+            Next k
+        Next j
+
+        Dim cloop = 0
+
+888:    REM cloop
+
+        Dim itrap = 0
+
+999:    REM a and b loop
+
+        itrap = itrap + 1
+
+        For i = 1 To n
+            For k = 1 To kk
+                aik(i, k) = 0.0
+            Next k
+            For j = 1 To n + 1
+                For k = 1 To kk
+                    aik(i, k) = aik(i, k) + (q(i, j, k) * bjk(j, k) * djk(j, k) * cij(i, j) * xij(i, j))
+                Next k
+            Next j
+
+            For k = 1 To kk
+                aik(i, k) = 1 / aik(i, k)
+            Next k
+        Next i
+
+        For k = 1 To kk
+            aik(n + 1, k) = 1
+        Next k
+
+        For j = 1 To n
+            For k = 1 To kk
+                bjk(j, k) = 0.0
+            Next k
+            For i = 1 To n + 1
+                For k = 1 To kk
+                    bjk(j, k) = bjk(j, k) + (q(i, j, k) * aik(i, k) * oik(i, k) * cij(i, j) * xij(i, j))
+                Next k
+            Next i
+
+            For k = 1 To kk
+                bjk(j, k) = 1 / bjk(j, k)
+            Next k
+        Next j
+
+        For k = 1 To kk
+            bjk(n + 1, k) = 1
+        Next k
+
+        REM compute the present values and return to the top of the
+
+        For i = 1 To n + 1
+            For k = 1 To kk
+                sumi(i, k) = 0.0
+                sumj(i, k) = 0.0
+            Next k
+        Next i
+
+        Dim devi = 0.0
+        Dim devj = 0.0
+
+        For i = 1 To n + 1
+            For j = 1 To n + 1
+                For k = 1 To kk
+                    xmod(i, j, k) = q(i, j, k) * aik(i, k) * oik(i, k) * bjk(j, k) * djk(j, k) * cij(i, j) * xij(i, j)
+                    sumi(i, k) = sumi(i, k) + xmod(i, j, k)
+                    sumj(j, k) = sumj(j, k) + xmod(i, j, k)
+                Next k
+            Next j
+        Next i
+
+        For i = 1 To n
+            For k = 1 To kk
+                devi = devi + Math.Abs(oik(i, k) - sumi(i, k))
+                devj = devj + Math.Abs(djk(i, k) - sumj(i, k))
+            Next k
+        Next i
+
+
+        REM check and go back to the top of the a, b loop
+        If itrap > 250 Then
+            Debug.Print("runnaway loop for a and b")
+            Debug.Print(devi, devj)
+            Stop
+        End If
+
+        If (devi > 2500 Or devj > 2500) Then GoTo 999
+
+        For i = 1 To n + 1
+            For j = 1 To n + 1
+                cij(i, j) = 0.0
+            Next j
+        Next i
+
+        For i = 1 To n + 1
+            For j = 1 To n + 1
+                For k = 1 To kk
+                    cij(i, j) = cij(i, j) + (q(i, j, k) * aik(i, k) * oik(i, k) * bjk(j, k) * djk(j, k))
+                Next k
+            Next j
+            For l = 1 To n
+                cij(i, l) = 1 / cij(i, l)
+            Next l
+        Next i
+
+        cloop = cloop + 1
+        If cloop < 20 Then GoTo 888
+        Print(2, "i", ",", "j", ",", "k", ",", "xobs", ",", "xmod", ",", "q", ",", "aik", ",", "oik", ",", "bjk", ",", "djk", ",", "cij", ",", "xij" & vbNewLine)
+        Print(4, "i", ",", "j", ",", "k", ",", "xobs", ",", "xmod", ",", "q", ",", "aik", ",", "oik", ",", "bjk", ",", "djk", ",", "cij", ",", "xij" & vbNewLine)
+
+        Dim tottot1 = 0.0
+        Dim tottot2 = 0.0
+
+        REM tottot1 is nxn matrix
+        REM tottot2 is n+1 x n+1 matrix
+
+        For i = 1 To n + 1
+            For j = 1 To n + 1
+                For k = 1 To kk
+                    If xmod(i, j, k) > 0.01 Then
+                        Print(2, i, ",", j, ",", k, ",", xobs(i, j, k), ",", xmod(i, j, k), ",", q(i, j, k), ",", aik(i, k), ",", oik(i, k), ",", bjk(j, k), ",", djk(j, k), ",", cij(i, j), ",", xij(i, j) & vbNewLine)
+                        tottot2 = tottot2 + xmod(i, j, k)
+                    End If
+                Next k
+            Next j
+        Next i
+
+        For i = 1 To n
+            For j = 1 To n
+                For k = 1 To kk
+                    If xmod(i, j, k) > 0.01 Then
+                        Print(4, i, ",", j, ",", k, ",", xobs(i, j, k), ",", xmod(i, j, k), ",", q(i, j, k), ",", aik(i, k), ",", oik(i, k), ",", bjk(j, k), ",", djk(j, k), ",", cij(i, j), ",", xij(i, j) & vbNewLine)
+                        tottot1 = tottot1 + xmod(i, j, k)
+                    End If
+                Next k
+            Next j
+        Next i
+
+        REM calculating total flow for each k group
+        REM first create variables
+        Dim kmodxij(6)
+        Dim kmodi(6)
+        Dim kmodj(6)
+
+        For k = 1 To kk
+            kmodxij(k) = 0.0
+            kmodi(k) = 0.0
+            kmodj(k) = 0.0
+            For i = 1 To n
+                For j = 1 To n
+                    kmodxij(k) = kmodxij(k) + xmod(i, j, k)
+                Next j
+            Next i
+        Next k
+
+        REM creating arrays for observed total k flows
+        Dim obstotk1 = 0.0
+        Dim obstotk2 = 0.0
+        Dim obstotk3 = 0.0
+
+        REM populating k full observed flow matrices
+        For i = 1 To n
+            For j = 1 To n
+                Input(15, k1(i, j))
+                obstotk1 = obstotk1 + k1(i, j)
+                Input(16, k2(i, j))
+                obstotk2 = obstotk2 + k2(i, j)
+                Input(17, k3(i, j))
+                obstotk3 = obstotk3 + k3(i, j)
+            Next j
+        Next i
+
+        REM calculating RMSE of cell by cell between Xmod and Xobs
+        Dim rmse1 = 0.0
+        Dim rmse11 = 0.0
+        Dim rmse2 = 0.0
+        Dim rmse22 = 0.0
+        Dim rmse3 = 0.0
+        Dim rmse33 = 0.0
+
+        For i = 1 To n
+            For j = 1 To n
+                rmse1 = rmse1 + Math.Pow((k1(i, j) - xmod(i, j, 1)), 2.0)
+                rmse2 = rmse2 + Math.Pow((k2(i, j) - xmod(i, j, 2)), 2.0)
+                rmse3 = rmse3 + Math.Pow((k3(i, j) - xmod(i, j, 3)), 2.0)
+            Next
+        Next
+
+        rmse11 = Math.Sqrt((rmse1 / 29719))
+        rmse22 = Math.Sqrt((rmse2 / 36206))
+        rmse33 = Math.Sqrt((rmse3 / 24092))
+
+        REM print observed total flow xij
+        Print(3, "total flow observed,", obstottot & vbNewLine)
+        Print(3, "total flow observed with 0.001,", tottot & vbNewLine)
+        REM print model total flow xij
+        Print(3, "total xmod n by n,", tottot1 & vbNewLine)
+        Print(3, "total xmod n+1 by n+1,", tottot2 & vbNewLine)
+        REM print total flow xij deviation
+        Print(3, "total flow deviation,", Math.Abs(obstottot - tottot1) & vbNewLine)
+        REM print total flow by each K group
+        For k = 1 To kk
+            Print(3, "total flow by k group,", k, ",", kmodxij(k) & vbNewLine)
+        Next
+
+        REM print flow for all origins for all K groups and deviation
+        REM        Print(3, "obs oi sum =,", oiObsSum & vbNewLine)
+        REM        Print(3, "mod oi sum =,", oiModSum & vbNewLine)
+        Print(3, "devi = ,", devi & vbNewLine)
+        REM print flow for all destinations for all K groups and deviation
+        REM        Print(3, "obs dj sum =,", djObsSum & vbNewLine)
+        REM        Print(3, "mod dj sum =,", djModSum & vbNewLine)
+        Print(3, "devj = ,", devj & vbNewLine)
+
+        Print(3, "rmse k1 = ,", rmse11 & vbNewLine)
+        Print(3, "rmse k2 = ,", rmse22 & vbNewLine)
+        Print(3, "rmse k3 = ,", rmse33 & vbNewLine)
+
+        Debug.Print("tottot1 = ", tottot1)
+        Debug.Print("tottot2 = ", tottot2)
+
+
+        Stop
+
+    End Sub
+
+
+
+
+End Module
